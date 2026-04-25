@@ -52,3 +52,20 @@ module "velero_bucket" {
   bucket        = "${local.full_name}-velero-backups"
   force_destroy = false
 }
+
+# Ensure Velero bucket has versioning and encryption
+resource "aws_s3_bucket_versioning" "velero" {
+  bucket = module.velero_bucket.s3_bucket_id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "velero" {
+  bucket = module.velero_bucket.s3_bucket_id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}

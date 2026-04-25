@@ -1,3 +1,7 @@
+# !!! IMPORTANT !!!
+# OIDC ARN below is a PLACEHOLDER.
+# Replace after EKS apply: terraform output -raw cluster_oidc_issuer
+
 terraform {
   required_version = ">= 1.3"
   required_providers {

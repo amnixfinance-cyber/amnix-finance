@@ -12,36 +12,60 @@ provider "aws" {
   region = var.region
 }
 
-module "state_bucket" {
-  source  = "terraform-aws-modules/s3-bucket/aws"
-  version = "~> 4.0"
+variable "region" {
+  type    = string
+  default = "us-east-1"
+}
 
-  bucket                  = "${var.project_name}-terraform-state-${var.environment}"
-  force_destroy           = var.environment != "prod"
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-  versioning = {
-    enabled = true
+variable "project_name" {
+  type    = string
+  default = "amnix-finance"
+}
+
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "${var.project_name}-terraform-state-${var.environment}"
+
+  lifecycle {
+    prevent_destroy = true
   }
-  server_side_encryption_configuration = {
-    rule = {
-      apply_server_side_encryption_by_default = {
-        sse_algorithm = "AES256"
-      }
+}
+
+resource "aws_s3_bucket_versioning" "state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
 }
 
-module "lock_table" {
-  source  = "terraform-aws-modules/dynamodb-table/aws"
-  version = "~> 4.0"
+resource "aws_s3_bucket_public_access_block" "state" {
+  bucket                  = aws_s3_bucket.terraform_state.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
 
+resource "aws_dynamodb_table" "terraform_locks" {
   name         = "${var.project_name}-terraform-locks"
-  hash_key     = "LockID"
   billing_mode = "PAY_PER_REQUEST"
-  attributes = [
-    { name = "LockID", type = "S" }
-  ]
+  hash_key     = "LockID"
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
 }
