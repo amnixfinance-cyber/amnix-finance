@@ -8,9 +8,22 @@ terraform {
   }
 }
 
-
 locals {
   full_name = "amnix-finance-${var.environment}"
+
+  encryption = {
+    rule = {
+      apply_server_side_encryption_by_default = {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+
+  tags = {
+    Project     = "amnix-finance"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
 }
 
 module "loki_bucket" {
@@ -18,6 +31,9 @@ module "loki_bucket" {
   version       = "~> 4.0"
   bucket        = "${local.full_name}-loki-logs"
   force_destroy = var.environment != "prod"
+  tags          = merge(local.tags, { Service = "loki" })
+
+  server_side_encryption_configuration = local.encryption
 
   lifecycle_rule = [{
     id         = "expire-old-logs"
@@ -31,6 +47,9 @@ module "tempo_bucket" {
   version       = "~> 4.0"
   bucket        = "${local.full_name}-tempo-traces"
   force_destroy = var.environment != "prod"
+  tags          = merge(local.tags, { Service = "tempo" })
+
+  server_side_encryption_configuration = local.encryption
 
   lifecycle_rule = [{
     id         = "expire-old-traces"
@@ -44,6 +63,9 @@ module "mlflow_bucket" {
   version       = "~> 4.0"
   bucket        = "${local.full_name}-mlflow-artifacts"
   force_destroy = var.environment != "prod"
+  tags          = merge(local.tags, { Service = "mlflow" })
+
+  server_side_encryption_configuration = local.encryption
 }
 
 module "velero_bucket" {
@@ -51,21 +73,11 @@ module "velero_bucket" {
   version       = "~> 4.0"
   bucket        = "${local.full_name}-velero-backups"
   force_destroy = false
-}
+  tags          = merge(local.tags, { Service = "velero" })
 
-# Ensure Velero bucket has versioning and encryption
-resource "aws_s3_bucket_versioning" "velero" {
-  bucket = module.velero_bucket.s3_bucket_id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
+  server_side_encryption_configuration = local.encryption
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "velero" {
-  bucket = module.velero_bucket.s3_bucket_id
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
+  versioning = {
+    enabled = true
   }
 }
