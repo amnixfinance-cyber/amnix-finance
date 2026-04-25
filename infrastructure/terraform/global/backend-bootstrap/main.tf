@@ -12,21 +12,6 @@ provider "aws" {
   region = var.region
 }
 
-variable "region" {
-  type    = string
-  default = "us-east-1"
-}
-
-variable "project_name" {
-  type    = string
-  default = "amnix-finance"
-}
-
-variable "environment" {
-  type    = string
-  default = "dev"
-}
-
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "${var.project_name}-terraform-state-${var.environment}"
 
