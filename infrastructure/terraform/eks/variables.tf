@@ -5,12 +5,12 @@ variable "region" {
 
 variable "cluster_name" {
   type    = string
-  default = "amnix-finance-eks-dev"
+  default = "amnix-finance-eks-prod"
 }
 
 variable "environment" {
   type    = string
-  default = "dev"
+  default = "prod"
 }
 
 variable "vpc_cidr" {
