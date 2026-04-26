@@ -8,7 +8,6 @@ terraform {
   }
 }
 
-
 module "kms" {
   source  = "terraform-aws-modules/kms/aws"
   version = "~> 3.0"
@@ -18,4 +17,10 @@ module "kms" {
   deletion_window_in_days = 7
   enable_key_rotation     = true
   aliases                 = ["amnix-finance-vault-unseal"]
+
+  tags = {
+    Project   = "amnix-finance"
+    ManagedBy = "terraform"
+    Usage     = "vault-unseal"
+  }
 }

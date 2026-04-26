@@ -1,6 +1,6 @@
 terraform {
   backend "s3" {
-    bucket         = "amnix-finance-terraform-state-dev"
+    bucket         = "amnix-finance-terraform-state-YOUR_AWS_ACCOUNT_ID"
     key            = "infrastructure/terraform/global/kms/terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true
