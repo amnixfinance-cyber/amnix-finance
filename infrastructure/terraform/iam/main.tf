@@ -36,8 +36,8 @@ module "irsa" {
   # Service-specific policies are attached per service after deployment.
   # Each service team is responsible for defining their own role_policy_arns.
   tags = {
-    Project     = "amnix-finance"
-    ManagedBy   = "terraform"
-    Service     = each.key
+    Project   = "amnix-finance"
+    ManagedBy = "terraform"
+    Service   = each.key
   }
 }

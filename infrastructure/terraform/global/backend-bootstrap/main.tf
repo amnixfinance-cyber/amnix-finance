@@ -12,9 +12,23 @@ provider "aws" {
   region = var.region
 }
 
-resource "aws_s3_bucket" "terraform_state" {
-  bucket = "${var.project_name}-terraform-state-${var.environment}"
+data "aws_caller_identity" "current" {}
 
+resource "aws_kms_key" "state" {
+  description             = "amnix-finance Terraform state encryption"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+  tags                    = var.tags
+}
+
+resource "aws_kms_alias" "state" {
+  name          = "alias/amnix-finance-terraform-state"
+  target_key_id = aws_kms_key.state.key_id
+}
+
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "${var.project_name}-terraform-state-${data.aws_caller_identity.current.account_id}"
+  tags   = var.tags
   lifecycle {
     prevent_destroy = true
   }
@@ -31,8 +45,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   bucket = aws_s3_bucket.terraform_state.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.state.arn
     }
+    bucket_key_enabled = true
   }
 }
 
@@ -48,9 +64,9 @@ resource "aws_dynamodb_table" "terraform_locks" {
   name         = "${var.project_name}-terraform-locks"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
-
   attribute {
     name = "LockID"
     type = "S"
   }
+  tags = var.tags
 }

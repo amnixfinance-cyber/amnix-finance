@@ -7,6 +7,7 @@ terraform {
   }
 }
 
+data "aws_caller_identity" "current" {}
 
 data "aws_availability_zones" "available" {
   filter {
@@ -20,7 +21,7 @@ locals {
   tags = {
     Environment = var.environment
     Project     = "amnix-finance"
-    Source      = "eks-blueprints"
+    ManagedBy   = "terraform"
   }
 }
 
@@ -39,14 +40,21 @@ module "vpc" {
   single_nat_gateway     = false
   one_nat_gateway_per_az = true
 
-  public_subnet_tags  = { "kubernetes.io/role/elb" = "1" }
-  private_subnet_tags = { "kubernetes.io/role/internal-elb" = "1", "karpenter.sh/discovery" = var.cluster_name }
-  tags                = local.tags
+  public_subnet_tags = {
+    "kubernetes.io/role/elb" = "1"
+  }
+  private_subnet_tags = {
+    "kubernetes.io/role/internal-elb" = "1"
+    "karpenter.sh/discovery"          = var.cluster_name
+  }
+
+  tags = local.tags
 }
 
 resource "aws_security_group" "vpc_endpoints" {
   name_prefix = "${var.cluster_name}-vpc-endpoints-"
   vpc_id      = module.vpc.vpc_id
+
   ingress {
     from_port   = 443
     to_port     = 443
@@ -59,6 +67,7 @@ resource "aws_security_group" "vpc_endpoints" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
   tags = local.tags
 }
 
@@ -70,24 +79,26 @@ module "vpc_endpoints" {
   create_security_group = false
   security_group_ids    = [aws_security_group.vpc_endpoints.id]
 
-  endpoints = merge({
-    s3 = {
-      service         = "s3"
-      service_type    = "Gateway"
-      route_table_ids = module.vpc.private_route_table_ids
-      tags            = { Name = "${var.cluster_name}-s3" }
-    }
+  endpoints = merge(
+    {
+      s3 = {
+        service         = "s3"
+        service_type    = "Gateway"
+        route_table_ids = module.vpc.private_route_table_ids
+        tags            = { Name = "${var.cluster_name}-s3" }
+      }
     },
     { for service in toset(["autoscaling", "ecr.api", "ecr.dkr", "ec2", "ec2messages",
       "elasticloadbalancing", "sts", "kms", "logs", "ssm", "ssmmessages"]) :
-      replace(service, ".", "_") =>
-      {
+      replace(service, ".", "_") => {
         service             = service
         subnet_ids          = module.vpc.private_subnets
         private_dns_enabled = true
         tags                = { Name = "${var.cluster_name}-${service}" }
       }
-  })
+    }
+  )
+
   tags = local.tags
 }
 
@@ -120,13 +131,15 @@ module "eks" {
       min_size       = 2
       max_size       = 3
       desired_size   = 2
+
       labels = {
         node-type = "bootstrap"
         arch      = "arm64"
       }
+
       taints = {
-        bootstrap-only = {
-          key    = "bootstrap-only"
+        CriticalAddonsOnly = {
+          key    = "CriticalAddonsOnly"
           value  = "true"
           effect = "NO_SCHEDULE"
         }
@@ -134,19 +147,26 @@ module "eks" {
     }
   }
 
-  tags = local.tags
+  tags = merge(local.tags, {
+    "karpenter.sh/discovery" = var.cluster_name
+  })
 }
 
 module "karpenter" {
   source  = "terraform-aws-modules/eks/aws//modules/karpenter"
   version = "~> 20.0"
 
-  cluster_name           = module.eks.cluster_name
-  irsa_oidc_provider_arn = module.eks.oidc_provider_arn
+  cluster_name = module.eks.cluster_name
+
+  enable_v1_permissions           = true
+  enable_pod_identity             = true
+  create_pod_identity_association = true
 
   enable_spot_termination = true
 
   node_iam_role_additional_policies = {
     AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   }
+
+  tags = local.tags
 }
